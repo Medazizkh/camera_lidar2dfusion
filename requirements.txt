@@ -1,0 +1,7 @@
+opencv-python
+ultralytics
+rplidar-roboticia
+numpy
+matplotlib
+streamlit
+scipy

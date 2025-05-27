@@ -1,0 +1,58 @@
+{
+    "camera": {
+        "device_id": 0,
+        "width": 640,
+        "height": 480,
+        "fps": 30,
+        "model_path": "yolov8n.pt",
+        "confidence_threshold": 0.5,
+        "horizontal_fov": 62.2,
+        "vertical_fov": 48.8
+    },
+    "lidar": {
+        "port": "COM3",
+        "baudrate": 115200,
+        "timeout": 1,
+        "scan_mode": "Normal",
+        "max_distance": 12.0,
+        "min_distance": 0.15
+    },
+    "calibration": {
+        "angle_cam_lidar": 0.0,
+        "distance_cam_lidar": 0.1,
+        "height_cam_lidar": 0.0,
+        "calibration_points": [],
+        "camera_fov": 60.0
+    },
+    "fusion": {
+        "angle_tolerance": 5.0,
+        "distance_tolerance": 0.5,
+        "max_association_distance": 2.0,
+        "use_kalman_filter": true
+    },
+    "ui": {
+        "interface_type": "tkinter",
+        "update_interval_ms": 33,
+        "show_fps": true,
+        "show_distances": true,
+        "show_angles": false,
+        "show_object_labels": true,
+        "lidar_point_size": 2,
+        "lidar_color": [
+            0,
+            255,
+            0
+        ],
+        "detection_color": [
+            0,
+            0,
+            255
+        ]
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "logs/detection_system.log",
+        "max_size_mb": 10,
+        "backup_count": 5
+    }
+}

@@ -1,0 +1,155 @@
+@startuml System_Architecture
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam component {
+    BackgroundColor #FFF3E0
+    BorderColor #F57C00
+    FontSize 10
+}
+skinparam package {
+    BackgroundColor #F1F8E9
+    BorderColor #689F38
+}
+
+title Architecture Modulaire - Camera_LidarFusion
+
+package "Hardware Layer" {
+    component [Caméra Intégrée\n640×480, 30 FPS] as Camera_HW
+    component [RPLiDAR A1M8\n12m, 5.5 Hz, 1°] as Lidar_HW
+    component [GPU NVIDIA MX330\n2GB GDDR5] as GPU_HW
+}
+
+package "Driver Layer" {
+    component [OpenCV\nCapture Video] as OpenCV_Driver
+    component [RPLiDAR Library\nCommunication Série] as RPLiDAR_Driver
+    component [CUDA 11.8\nAccélération GPU] as CUDA_Driver
+}
+
+package "Core Modules" {
+    
+    package "CameraModule (camera.py)" {
+        component [Capture Manager] as CaptureManager
+        component [YOLOv8n Engine] as YOLOEngine
+        component [Detection Processor] as DetectionProcessor
+        component [Angle Calculator] as AngleCalc
+        
+        CaptureManager --> YOLOEngine : frame
+        YOLOEngine --> DetectionProcessor : raw_detections
+        DetectionProcessor --> AngleCalc : filtered_detections
+    }
+    
+    package "LidarModule (lidar.py)" {
+        component [Serial Communication] as SerialComm
+        component [Scan Thread] as ScanThread
+        component [Data Filter] as DataFilter
+        component [Coordinate Converter] as CoordConverter
+        
+        SerialComm --> ScanThread : raw_data
+        ScanThread --> DataFilter : scan_points
+        DataFilter --> CoordConverter : valid_points
+    }
+    
+    package "CalibrationModule (calibrate.py)" {
+        component [Parameter Manager] as ParamManager
+        component [Manual Calibration] as ManualCalib
+        component [Transformation Calculator] as TransformCalc
+        
+        ParamManager --> ManualCalib : config
+        ManualCalib --> TransformCalc : measurements
+    }
+    
+    package "FusionModule (fusion.py)" {
+        component [Data Synchronizer] as DataSync
+        component [Association Engine] as AssocEngine
+        component [Validation Filter] as ValidationFilter
+        component [Result Processor] as ResultProcessor
+        
+        DataSync --> AssocEngine : synchronized_data
+        AssocEngine --> ValidationFilter : associations
+        ValidationFilter --> ResultProcessor : valid_associations
+    }
+    
+    package "Dashboard (dashboard.py)" {
+        component [UI Controller] as UIController
+        component [Visualization Engine] as VizEngine
+        component [Event Handler] as EventHandler
+        component [Display Manager] as DisplayManager
+        
+        UIController --> VizEngine : ui_commands
+        VizEngine --> DisplayManager : visual_data
+        EventHandler --> UIController : user_events
+    }
+}
+
+package "Configuration Layer" {
+    component [config.json\nParamètres Système] as ConfigFile
+    component [Logging System\nMonitoring] as LoggingSystem
+}
+
+package "External Dependencies" {
+    component [Ultralytics\nYOLOv8n] as Ultralytics
+    component [NumPy\nCalculs Matriciels] as NumPy
+    component [Matplotlib\nVisualisation] as Matplotlib
+    component [Tkinter/Streamlit\nInterface] as UIFramework
+}
+
+' Hardware connections
+Camera_HW --> OpenCV_Driver
+Lidar_HW --> RPLiDAR_Driver
+GPU_HW --> CUDA_Driver
+
+' Driver to module connections
+OpenCV_Driver --> CaptureManager
+RPLiDAR_Driver --> SerialComm
+CUDA_Driver --> YOLOEngine
+
+' Inter-module connections
+AngleCalc --> DataSync : detection_angles
+CoordConverter --> DataSync : lidar_points
+TransformCalc --> AssocEngine : calibration_params
+ResultProcessor --> VizEngine : fusion_results
+
+' Configuration connections
+ConfigFile --> ParamManager
+ConfigFile --> CaptureManager
+ConfigFile --> SerialComm
+LoggingSystem --> ResultProcessor
+
+' External dependencies
+Ultralytics --> YOLOEngine
+NumPy --> CoordConverter
+NumPy --> AssocEngine
+Matplotlib --> VizEngine
+UIFramework --> UIController
+
+note top of Camera_HW
+  ASUS VivoBook X515EP
+  Intel i5-1135G7
+  8GB DDR4-3200
+  Windows 11
+end note
+
+note top of GPU_HW
+  Accélération CUDA
+  Inférence YOLOv8n
+  Performance optimisée
+end note
+
+note bottom of FusionModule
+  Algorithme principal:
+  1. Synchronisation temporelle
+  2. Association angulaire ±5°
+  3. Validation cohérence
+  4. Filtrage aberrants
+end note
+
+note bottom of ConfigFile
+  Paramètres calibration:
+  - angle_cam_lidar: 0°
+  - distance_cam_lidar: 0.1m
+  - camera_fov: 62.2°
+  - confidence_threshold: 0.5
+end note
+
+@enduml

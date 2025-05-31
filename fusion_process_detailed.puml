@@ -1,0 +1,175 @@
+@startuml Fusion_Process_Detailed
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam activity {
+    BackgroundColor #E8F5E8
+    BorderColor #2E7D32
+    FontSize 9
+}
+
+title Processus de Fusion Caméra-LiDAR Détaillé
+
+start
+
+:Réception données synchronisées;
+note right
+  - Frame caméra (640×480)
+  - Scan LiDAR (360°)
+  - Timestamp aligné
+end note
+
+partition "Préparation Données Caméra" {
+    :Détections YOLOv8n disponibles;
+    
+    if (Liste détections vide?) then (oui)
+        :Retourner frame original;
+        stop
+    else (non)
+        :Traiter chaque détection;
+    endif
+    
+    repeat
+        :Extraire coordonnées bbox;
+        note right
+          x1, y1, x2, y2
+          classe, score
+        end note
+        
+        :Calculer centre bbox;
+        note right
+          x_center = (x1 + x2) / 2
+          y_center = (y1 + y2) / 2
+        end note
+        
+        :Convertir en angle horizontal;
+        note right
+          angle_deg = (x_center - width/2) * FOV / width
+          angle_deg = (x_center - 320) * 62.2 / 640
+        end note
+        
+        :Stocker (détection, angle);
+        
+    repeat while (Autres détections?)
+}
+
+partition "Préparation Données LiDAR" {
+    :Scan LiDAR brut disponible;
+    
+    repeat
+        :Lire point (qualité, angle, distance);
+        
+        if (Qualité > seuil?) then (oui)
+            if (Distance dans plage 0.15-12m?) then (oui)
+                :Normaliser angle (0-360°);
+                :Convertir distance mm→m;
+                :Ajouter à liste points valides;
+            else (non)
+                :Ignorer point aberrant;
+            endif
+        else (non)
+            :Ignorer point faible qualité;
+        endif
+        
+    repeat while (Autres points scan?)
+    
+    :Trier points par angle;
+}
+
+partition "Processus de Fusion" {
+    repeat
+        :Prendre détection suivante;
+        :Récupérer angle_camera;
+        
+        :Appliquer calibration;
+        note right
+          angle_lidar = angle_camera + angle_cam_lidar
+          angle_lidar = angle_camera + 0° (alignés)
+        end note
+        
+        :Définir zone recherche ±5°;
+        note right
+          angle_min = angle_lidar - 5°
+          angle_max = angle_lidar + 5°
+        end note
+        
+        :Chercher points LiDAR dans zone;
+        
+        if (Points trouvés?) then (non)
+            :Marquer "Pas de correspondance";
+            :Distance = null;
+        else (oui)
+            if (Un seul point?) then (oui)
+                :Utiliser ce point;
+            else (non)
+                :Calculer différences angulaires;
+                :Sélectionner point le plus proche;
+                note right
+                  min(|angle_point - angle_lidar|)
+                end note
+            endif
+            
+            :Extraire distance sélectionnée;
+            
+            :Validation cohérence;
+            if (Distance réaliste?) then (oui)
+                :Associer distance à détection;
+                note right
+                  Fusion réussie !
+                  Objet + Position 3D
+                end note
+            else (non)
+                :Rejeter association;
+                :Distance = null;
+            endif
+        endif
+        
+    repeat while (Autres détections?)
+}
+
+partition "Post-traitement" {
+    :Créer dictionnaire résultats;
+    note right
+      {index_detection: distance_mesurée}
+    end note
+    
+    :Calculer statistiques;
+    note right
+      - Nb détections totales
+      - Nb fusions réussies
+      - Taux de fusion
+    end note
+    
+    :Logger performances;
+    note right
+      Temps traitement
+      Erreurs éventuelles
+    end note
+}
+
+partition "Annotation Visuelle" {
+    repeat
+        :Prendre détection suivante;
+        
+        if (Distance associée?) then (oui)
+            :Dessiner bbox verte;
+            :Afficher classe + score;
+            :Afficher distance + unité;
+            note right
+              "Person (0.87) - 2.34m"
+            end note
+        else (non)
+            :Dessiner bbox rouge;
+            :Afficher "Pas de distance";
+        endif
+        
+    repeat while (Autres détections?)
+    
+    :Retourner frame annoté;
+}
+
+:Envoyer résultats à interface;
+
+stop
+
+@enduml

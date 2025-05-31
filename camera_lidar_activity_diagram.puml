@@ -1,0 +1,214 @@
+@startuml Camera_LidarFusion_Activity_Diagram
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam activity {
+    BackgroundColor #E1F5FE
+    BorderColor #0277BD
+    FontSize 10
+}
+skinparam partition {
+    BackgroundColor #F3E5F5
+    BorderColor #7B1FA2
+}
+
+title Diagramme d'Activité - Système Camera_LidarFusion
+
+start
+
+:Initialisation du système;
+note right
+  - Chargement config.json
+  - Vérification matériel
+  - Configuration logging
+end note
+
+partition "Module Calibration" {
+    :Charger paramètres calibration;
+    note right
+      - angle_cam_lidar: 0°
+      - distance_cam_lidar: 0.1m
+      - camera_fov: 62.2°
+    end note
+    
+    if (Calibration valide?) then (non)
+        :Lancer calibration manuelle;
+        :Mesurer distance physique;
+        :Mesurer angle décalage;
+        :Sauvegarder paramètres;
+    else (oui)
+        :Utiliser calibration existante;
+    endif
+}
+
+partition "Module Caméra" {
+    :Initialiser caméra intégrée;
+    note right
+      Résolution: 640×480
+      FPS: 30
+      FOV: 62.2°
+    end note
+    
+    :Charger modèle YOLOv8n;
+    note right
+      - Modèle pré-entraîné
+      - Accélération CUDA MX330
+      - Seuil confiance: 0.5
+    end note
+    
+    if (Caméra disponible?) then (non)
+        :Erreur: Caméra non trouvée;
+        stop
+    else (oui)
+        :Caméra prête;
+    endif
+}
+
+partition "Module LiDAR" {
+    :Initialiser RPLiDAR A1M8;
+    note right
+      Port: COM3
+      Baudrate: 115200
+      Portée: 12m
+      Fréquence: 5.5 Hz
+    end note
+    
+    :Démarrer thread lecture;
+    note right
+      - Lecture asynchrone
+      - Balayage 360°
+      - Filtrage bruit
+    end note
+    
+    if (LiDAR connecté?) then (non)
+        :Erreur: LiDAR non trouvé;
+        stop
+    else (oui)
+        :LiDAR prêt;
+    endif
+}
+
+:Démarrer interface utilisateur;
+note right
+  Dashboard Tkinter/Streamlit
+  Visualisation temps réel
+end note
+
+repeat
+    partition "Boucle Principale (30 FPS)" {
+        
+        partition "Acquisition Données" {
+            fork
+                :Capturer frame caméra;
+                note right: 640×480 RGB end note
+            fork again
+                :Lire scan LiDAR;
+                note right: Points (angle, distance) end note
+            end fork
+        }
+        
+        partition "Module Caméra - Détection" {
+            :Redimensionner image;
+            :Inférence YOLOv8n (GPU);
+            note right
+              - Accélération CUDA
+              - Classes détectées
+              - Scores confiance
+            end note
+            
+            if (Objets détectés?) then (non)
+                :Aucune détection;
+            else (oui)
+                :Extraire boîtes englobantes;
+                :Calculer angles horizontaux;
+                note right
+                  angle = (x_center - width/2) * FOV / width
+                end note
+                :Filtrer par seuil confiance;
+            endif
+        }
+        
+        partition "Module LiDAR - Traitement" {
+            :Filtrer points aberrants;
+            :Convertir coordonnées polaires;
+            note right
+              x = distance * cos(angle)
+              y = distance * sin(angle)
+            end note
+            :Interpoler angles manquants;
+        }
+        
+        partition "Module Fusion" {
+            if (Détections disponibles?) then (oui)
+                :Pour chaque détection;
+                repeat
+                    :Récupérer angle horizontal objet;
+                    :Appliquer transformation calibration;
+                    note right
+                      angle_lidar = angle_camera + angle_cam_lidar
+                    end note
+                    
+                    :Chercher points LiDAR dans zone ±5°;
+                    
+                    if (Points trouvés?) then (oui)
+                        :Sélectionner point le plus proche;
+                        :Valider cohérence distance (0.15-12m);
+                        
+                        if (Distance valide?) then (oui)
+                            :Associer distance à détection;
+                            note right
+                              Fusion réussie
+                              Objet + Distance
+                            end note
+                        else (non)
+                            :Rejeter association;
+                        endif
+                    else (non)
+                        :Pas de correspondance LiDAR;
+                    endif
+                repeat while (Autres détections?)
+            else (non)
+                :Pas de fusion possible;
+            endif
+        }
+        
+        partition "Affichage et Annotation" {
+            :Dessiner boîtes englobantes;
+            :Afficher distances mesurées;
+            :Superposer informations;
+            note right
+              - Classe objet
+              - Score confiance
+              - Distance LiDAR
+            end note
+            
+            :Mettre à jour interface;
+            :Visualiser scan LiDAR polaire;
+        }
+        
+        partition "Logging et Métriques" {
+            :Calculer FPS réel;
+            :Mesurer latence traitement;
+            :Logger erreurs éventuelles;
+            note right
+              Performance monitoring
+              Erreur moyenne: 12cm
+            end note
+        }
+    }
+    
+    :Attendre prochaine frame;
+    note right: ~33ms pour 30 FPS end note
+
+repeat while (Système actif?)
+
+partition "Arrêt Système" {
+    :Arrêter threads LiDAR;
+    :Libérer ressources caméra;
+    :Fermer interface utilisateur;
+    :Sauvegarder logs;
+}
+
+stop
+
+@enduml
